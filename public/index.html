@@ -1,0 +1,124 @@
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <link rel="stylesheet" href="https://unpkg.com/tabulator-tables@5.6.1/dist/css/tabulator.min.css">
+  <style>
+    .modal {
+      display: none;
+      position: fixed;
+      z-index: 1;
+      left: 0;
+      top: 0;
+      width: 100%;
+      height: 100%;
+      background-color: rgba(0, 0, 0, 0.5);
+    }
+    .modal-content {
+      background-color: white;
+      border: 1px solid #ccc;
+      border-radius: 5px;
+      padding: 20px;
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+    }
+  </style>
+  <script src="https://unpkg.com/tabulator-tables@5.6.1/dist/js/tabulator.min.js"></script>
+  <title>Herdlist Viewer</title>
+</head>
+<body>
+  <h1><center>Beef and Dairy Viewer/Editor</center></h1>
+  <div class="modal" id="modal">
+    <div class="modal-content">
+      <h2>Enter Your Credentials</h2>
+      <form id="login-form">
+        <label for="username">Username: </label>
+        <input type="text" id="username" name="username" required><br><br>
+        <label for="password">Password: </label>
+        <input type="password" id="password" name="password" required><br><br>
+        <button type="submit">Submit</button>
+      </form>
+    </div>
+  </div>
+  <div id="userInfo" style="display: none; position: fixed; top: 0; right: 0;">
+    Welcome, <span id="loggedInUsername"></span>!
+    <button id="logoutButton">Logout</button>
+  </div>
+  <div>
+    <label for="group-by-selector">Group By:</label>
+    <select id="group-by-selector"></select>
+    <button id="saveButton">Save</button>
+  </div>
+  <div id="table"></div>
+  <script>
+    const modal = document.getElementById('modal');
+    const form = document.getElementById('login-form');
+    const userInfoDiv = document.getElementById('userInfo');
+    const loggedInUsernameSpan = document.getElementById('loggedInUsername');
+    const logoutButton = document.getElementById('logoutButton');
+    const hasSignedIn = localStorage.getItem('hasSignedIn');
+    const savedUsername = localStorage.getItem('username');
+
+    if (hasSignedIn) {
+      loggedInUsernameSpan.textContent = savedUsername;
+      userInfoDiv.style.display = 'block';
+    } else {
+      modal.style.display = 'block';
+    }
+
+    form.addEventListener('submit', async function (event) {
+      event.preventDefault();
+      const username = form.username.value;
+      const password = form.password.value;
+      if (username && password) {
+        localStorage.setItem('hasSignedIn', 'true');
+        localStorage.setItem('username', username);
+        loggedInUsernameSpan.textContent = username;
+        userInfoDiv.style.display = 'block';
+        modal.style.display = 'none';
+      }
+    });
+
+    logoutButton.addEventListener('click', () => {
+      localStorage.removeItem('hasSignedIn');
+      localStorage.removeItem('username');
+      userInfoDiv.style.display = 'none';
+      modal.style.display = 'block';
+    });
+
+    fetch('/api/v1/animals')
+      .then(response => response.json())
+      .then(data => {
+        const columns = Object.keys(data[0]);
+        const groupBySelector = document.getElementById('group-by-selector');
+        columns.forEach(column => {
+          const option = document.createElement('option');
+          option.value = column;
+          option.textContent = column;
+          groupBySelector.appendChild(option);
+        });
+        const table = new Tabulator('#table', {
+          layout: 'fitColumns',
+          groupBy: groupBySelector.value,
+          columns: columns.map(col => ({ title: col, field: col, editor: true })),
+          data: data
+        });
+        groupBySelector.addEventListener('change', () => {
+          table.setGroupBy(groupBySelector.value);
+        });
+        document.getElementById('saveButton').addEventListener('click', () => {
+          const updatedData = table.getData();
+          fetch('/api/v1/animals/update', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(updatedData)
+          }).then(res => res.text()).then(msg => alert(msg));
+        });
+      });
+  </script>
+</body>
+</html>
